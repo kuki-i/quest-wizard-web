@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quest Wizard</title>
+    <!-- Tailwind CSS for modern responsive layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for high-quality icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts matching the Figma design -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', 'Fredoka', sans-serif;
+            background-color: #0c0019; /* Deep cyber violet background */
+            color: #f4f4f6;
+            background-image: radial-gradient(circle at 50% 20%, #1c003a 0%, #0c0019 75%);
+            overflow-x: hidden;
+        }
+
+        /* 60fps butter-smooth hardware-accelerated dice shaking animation */
+        @keyframes diceShake {
+            0% { transform: translate3d(0, 0, 0) rotate(0deg); }
+            12.5% { transform: translate3d(-3px, 2px, 0) rotate(-4deg); }
+            25% { transform: translate3d(3px, -2px, 0) rotate(3deg); }
+            37.5% { transform: translate3d(-2px, -3px, 0) rotate(-2deg); }
+            50% { transform: translate3d(2px, 3px, 0) rotate(4deg); }
+            62.5% { transform: translate3d(-3px, -1px, 0) rotate(-3deg); }
+            75% { transform: translate3d(3px, 2px, 0) rotate(3deg); }
+            87.5% { transform: translate3d(-1px, 2px, 0) rotate(-1deg); }
+            100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        }
+
+        .animate-smooth-shake {
+            animation: diceShake 0.4s cubic-bezier(.36,.07,.19,.97) infinite;
+            will-change: transform;
+        }
+
+        /* Fluid hardware-accelerated interface state transitions */
+        .state-container {
+            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .state-hidden {
+            opacity: 0;
+            transform: scale(0.96) translate3d(0, 4px, 0);
+            pointer-events: none;
+            position: absolute;
+            width: 100%;
+        }
+
+        .state-visible {
+            opacity: 1;
+            transform: scale(1) translate3d(0, 0, 0);
+            pointer-events: auto;
+            position: relative;
+        }
+
+        /* Custom thin scrollbar for the quest list */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #17002b;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #7a1fa2;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9c27b0;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4 md:p-8">
+
+    <!-- Header / Branding Container -->
+    <header class="max-w-6xl w-full mx-auto flex justify-between items-center mb-6">
+        <div class="flex items-center gap-3 bg-[#17002b] px-5 py-2.5 rounded-full border border-purple-900/30 shadow-lg">
+            <!-- Icon matching the Figma top-left widget screenshot -->
+            <div class="w-10 h-10 rounded-full bg-[#1e0238] flex items-center justify-center border border-purple-800/20 shadow-md">
+                <div class="w-6 h-6 rounded-[4px] bg-[#EAE5F3] p-1 shadow-inner flex items-center justify-center">
+                    <!-- Diagonal three dots SVG -->
+                    <svg class="w-full h-full" viewBox="0 0 100 100">
+                        <circle cx="25" cy="25" r="11" fill="#0c0019" />
+                        <circle cx="50" cy="50" r="11" fill="#0c0019" />
+                        <circle cx="75" cy="75" r="11" fill="#0c0019" />
+                    </svg>
+                </div>
+            </div>
+            <span class="text-white font-bold tracking-wide text-sm">Quest wizard</span>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- Connection Status Indicator -->
+            <div id="status-indicator"></div>
+
+            <div class="w-10 h-10 rounded-full bg-[#7a1fa2] flex items-center justify-center font-bold text-white shadow-lg">
+                W
+            </div>
+            <span class="hidden sm:inline text-sm text-purple-200 font-semibold">Wizard Mode</span>
+        </div>
+    </header>
+
+    <!-- Main Grid Layout matching your Figma wireframe -->
+    <main class="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 my-auto flex-grow items-stretch">
+
+        <!-- Left & Center column: Rolling Sandbox (2 columns wide on desktop) -->
+        <div class="lg:col-span-2 flex flex-col gap-6 h-full justify-between">
+
+            <!-- Main Display Card with a stable height to prevent layout jumps -->
+            <div id="display-card" class="bg-[#17002b] rounded-[32px] p-6 md:p-12 flex flex-col items-center justify-center text-center border border-purple-900/40 shadow-2xl relative overflow-hidden min-h-[460px] flex-grow transition-all duration-300">
+
+                <!-- IDLE STATE -->
+                <div id="state-idle" class="state-container state-visible flex flex-col items-center justify-center gap-6 w-full">
+                    <h2 class="text-2xl md:text-3xl font-bold tracking-wide text-purple-100">Roll the dice</h2>
+
+                    <!-- Perfect isometric 3D SVG dice: 1 on top, 2 on left, 3 diagonally on right -->
+                    <div class="cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95" onclick="triggerRandomizer()">
+                        <svg class="w-36 h-36 drop-shadow-[0_15px_15px_rgba(122,31,162,0.35)]" viewBox="0 0 200 200">
+                            <!-- Top face (rhombus) -->
+                            <path d="M 100,45 L 160,80 L 100,115 L 40,80 Z" fill="#EAE5F3" />
+                            <!-- Left face -->
+                            <path d="M 40,80 L 100,115 L 100,185 L 40,150 Z" fill="#C5B6DA" />
+                            <!-- Right face -->
+                            <path d="M 100,115 L 160,80 L 160,150 L 100,185 Z" fill="#A591C5" />
+
+                            <!-- 1 Dot on top face -->
+                            <ellipse cx="100" cy="80" rx="9" ry="5.5" fill="#7a1fa2" />
+
+                            <!-- 2 Dots on left face -->
+                            <ellipse cx="60" cy="115" rx="6" ry="9.5" transform="rotate(-30 60 115)" fill="#7a1fa2" />
+                            <ellipse cx="80" cy="150" rx="6" ry="9.5" transform="rotate(-30 80 150)" fill="#7a1fa2" />
+
+                            <!-- 3 Dots on right face (isometric diagonal alignment) -->
+                            <!-- Bottom-left dot -->
+                            <ellipse cx="114" cy="161" rx="6" ry="9.5" transform="rotate(30 114 161)" fill="#7a1fa2" />
+                            <!-- Center dot -->
+                            <ellipse cx="130" cy="132.5" rx="6" ry="9.5" transform="rotate(30 130 132.5)" fill="#7a1fa2" />
+                            <!-- Top-right dot -->
+                            <ellipse cx="146" cy="104" rx="6" ry="9.5" transform="rotate(30 146 104)" fill="#7a1fa2" />
+                        </svg>
+                    </div>
+                    <p class="text-purple-300/60 text-sm max-w-sm">Add some items to your Quest Log, then roll the dice to decide your fate.</p>
+                </div>
+
+                <!-- ROLLING STATE -->
+                <div id="state-rolling" class="state-container state-hidden flex flex-col items-center justify-center gap-6 w-full">
+                    <h2 class="text-2xl md:text-3xl font-bold tracking-wide text-purple-300 animate-pulse">Deciding your fate...</h2>
+
+                    <!-- Shaking Isometric Dice -->
+                    <div class="animate-smooth-shake">
+                        <svg class="w-36 h-36 drop-shadow-[0_20px_20px_rgba(168,85,247,0.4)]" viewBox="0 0 200 200">
+                            <path d="M 100,45 L 160,80 L 100,115 L 40,80 Z" fill="#EAE5F3" />
+                            <path d="M 40,80 L 100,115 L 100,185 L 40,150 Z" fill="#C5B6DA" />
+                            <path d="M 100,115 L 160,80 L 160,150 L 100,185 Z" fill="#A591C5" />
+
+                            <ellipse cx="100" cy="80" rx="9" ry="5.5" fill="#7a1fa2" />
+
+                            <ellipse cx="60" cy="115" rx="6" ry="9.5" transform="rotate(-30 60 115)" fill="#7a1fa2" />
+                            <ellipse cx="80" cy="150" rx="6" ry="9.5" transform="rotate(-30 80 150)" fill="#7a1fa2" />
+
+                            <ellipse cx="114" cy="161" rx="6" ry="9.5" transform="rotate(30 114 161)" fill="#7a1fa2" />
+                            <ellipse cx="130" cy="132.5" rx="6" ry="9.5" transform="rotate(30 130 132.5)" fill="#7a1fa2" />
+                            <ellipse cx="146" cy="104" rx="6" ry="9.5" transform="rotate(30 146 104)" fill="#7a1fa2" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- RESULT STATE -->
+                <div id="state-result" class="state-container state-hidden flex flex-col items-center justify-center gap-5 w-full">
+                    <span class="text-xs uppercase tracking-widest font-extrabold text-purple-200 bg-[#7a1fa2]/30 border border-[#7a1fa2]/50 px-5 py-2 rounded-full">
+                        Your quest is...
+                    </span>
+
+                    <!-- Clean straight font weight with no italic -->
+                    <h2 id="result-text" class="text-3xl md:text-4xl font-extrabold text-white px-4 max-w-md break-words">
+                        "Hydrate yourself"
+                    </h2>
+
+                    <!-- Dice asset in the result screen -->
+                    <div class="my-1">
+                        <svg class="w-28 h-28 drop-shadow-[0_10px_10px_rgba(122,31,162,0.3)]" viewBox="0 0 200 200">
+                            <path d="M 100,45 L 160,80 L 100,115 L 40,80 Z" fill="#EAE5F3" />
+                            <path d="M 40,80 L 100,115 L 100,185 L 40,150 Z" fill="#C5B6DA" />
+                            <path d="M 100,115 L 160,80 L 160,150 L 100,185 Z" fill="#A591C5" />
+
+                            <ellipse cx="100" cy="80" rx="9" ry="5.5" fill="#7a1fa2" />
+
+                            <ellipse cx="60" cy="115" rx="6" ry="9.5" transform="rotate(-30 60 115)" fill="#7a1fa2" />
+                            <ellipse cx="80" cy="150" rx="6" ry="9.5" transform="rotate(-30 80 150)" fill="#7a1fa2" />
+
+                            <ellipse cx="114" cy="161" rx="6" ry="9.5" transform="rotate(30 114 161)" fill="#7a1fa2" />
+                            <ellipse cx="130" cy="132.5" rx="6" ry="9.5" transform="rotate(30 130 132.5)" fill="#7a1fa2" />
+                            <ellipse cx="146" cy="104" rx="6" ry="9.5" transform="rotate(30 146 104)" fill="#7a1fa2" />
+                        </svg>
+                    </div>
+
+                    <button onclick="completeQuest()" class="px-10 py-3.5 bg-[#110022] border border-[#7a1fa2]/40 hover:bg-[#1a0033] hover:border-[#7a1fa2] text-purple-100 rounded-full font-bold transition-all transform hover:scale-105 active:scale-95 shadow-lg">
+                        Complete!
+                    </button>
+                </div>
+
+                <!-- CELEBRATION / WIN STATE -->
+                <div id="state-celebration" class="state-container state-hidden flex flex-col items-center justify-center gap-5 w-full">
+                    <span class="text-4xl font-extrabold animate-bounce text-purple-100"> QUEST CLEARED! </span>
+
+                    <!-- Glowing clean quote block with author element removed -->
+                    <div class="w-full max-w-md p-8 rounded-3xl border border-[#7a1fa2]/60 bg-[#120024] relative shadow-[0_0_30px_rgba(122,31,162,0.4)] flex flex-col items-center justify-center min-h-[160px] select-none">
+                        <span class="text-3xl text-purple-400 mb-3">🔮</span>
+                        <p id="quote-text" class="text-lg font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-purple-200 to-pink-200 px-2 italic leading-relaxed">
+                            "If at first you don't succeed, call it version 1.0."
+                        </p>
+                    </div>
+
+                    <button onclick="resetDisplay()" class="text-sm font-semibold text-purple-300 hover:text-white underline transition-colors cursor-pointer mt-2">
+                        ← Back to wizard
+                    </button>
+                </div>
+            </div>
+
+            <!-- Giant Custom Roll Button -->
+            <button id="roll-btn" onclick="triggerRandomizer()" class="w-full bg-[#7a1fa2] hover:bg-[#9c27b0] text-white text-lg font-bold py-4.5 px-8 rounded-full transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-purple-950/40">
+                Roll
+            </button>
+        </div>
+
+        <!-- Right Column: Quest Log (Perfect aesthetic clone) -->
+        <div class="bg-[#17002b] rounded-[32px] p-6 flex flex-col justify-between border border-purple-900/30 shadow-2xl min-h-[460px] h-full">
+            <div class="flex flex-col h-full justify-start">
+                <!-- Header -->
+                <div class="flex justify-between items-baseline mb-4">
+                    <h2 class="text-xl font-bold text-white tracking-wide">
+                        Quest log
+                    </h2>
+                    <button onclick="clearAllQuests()" class="text-xs text-purple-400/80 hover:text-red-400 transition-colors font-semibold">Clear all</button>
+                </div>
+
+                <!-- Input Row -->
+                <div class="relative flex items-center mb-5">
+                    <input id="quest-input" type="text" placeholder="Add your quest" class="w-full bg-[#110022] border border-purple-950 rounded-full pl-5 pr-14 py-3.5 text-sm focus:outline-none focus:border-[#7a1fa2] transition-all text-white placeholder-purple-300/40 font-medium">
+                    <button onclick="addNewQuest()" class="absolute right-2 w-10 h-10 rounded-full bg-[#7a1fa2] hover:bg-[#9c27b0] text-white flex items-center justify-center font-bold transition-all transform active:scale-90 cursor-pointer">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+
+                <!-- Dynamic Scrollable list -->
+                <div id="quest-list" class="space-y-3 max-h-[250px] overflow-y-auto pr-1 flex-grow">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- In-App suggestions widget -->
+            <div class="mt-4 p-4 bg-purple-950/20 rounded-2xl border border-purple-900/20 flex items-start gap-3">
+                <span class="text-lg">💡</span>
+                <div class="text-xs text-purple-300/80">
+                    <p class="font-bold text-purple-200 mb-0.5">Need inspiration?</p>
+                    <button onclick="addSuggestedQuest()" class="hover:underline text-left hover:text-purple-100 transition-colors">
+                        "Stretch for 2 minutes and hydrate" <span class="text-[#a855f7] font-extrabold">+ Add</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="text-center text-xs text-purple-300/30 max-w-6xl w-full mx-auto pt-6 mt-4 border-t border-purple-950/30">
+        Quest Wizard App • Connected to Python Flask Backend
+    </footer>
+
+    <!-- Interactive JS Controller -->
+    <script>
+        const questListContainer = document.getElementById('quest-list');
+        const questInput = document.getElementById('quest-input');
+
+        // Initial state set only to "Hydrate yourself"
+        let quests = ["Hydrate yourself"];
+        let backendAvailable = false;
+        let rolledQuestIndex = -1;
+
+        const suggestions = [
+            "Work out time!",
+            "Touch some grass",
+            "Watch that movie you keep putting off forever",
+            "Listen to your favourite artist while cleaning",
+            "Stretching exercises",
+            "Treat yourself to something sweet"
+        ];
+
+        // Inspirational quote set
+        const funnyInspirationalQuotes = [
+            { quote: "If at first you don't succeed, call it version 1.0." },
+            { quote: "You're making progress! What's next?" },
+            { quote: "Quest complete! Go and hydrate like a champ." },
+            { quote: "Simplicity is the soul of efficiency. You nailed it!" },
+            { quote: "The best way to get something done faster is to start doing it." }
+        ];
+
+        // Resolves request URL for local file environments vs hosted servers
+        function getApiUrl(endpoint) {
+            if (window.location.protocol === 'file:' ||
+                window.location.protocol === 'blob:' ||
+                !(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+                return `http://127.0.0.1:5000${endpoint}`;
+            }
+            return endpoint;
+        }
+
+        // Updates connection state pill
+        function updateStatusIndicator() {
+            const indicator = document.getElementById('status-indicator');
+            if (backendAvailable) {
+                indicator.innerHTML = `
+                    <span class="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-full flex items-center gap-1.5 font-bold transition-all">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Flask Connected
+                    </span>
+                `;
+            } else {
+                indicator.innerHTML = `
+                    <span class="text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-full flex items-center gap-1.5 font-bold transition-all">
+                        <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span> Offline Mode
+                    </span>
+                `;
+            }
+        }
+
+        // Fetch quests on launch
+        async function loadQuestsFromServer() {
+            try {
+                const response = await fetch(getApiUrl('/api/quests'));
+                if (response.ok) {
+                    const data = await response.json();
+                    quests = data.quests;
+                    backendAvailable = true;
+                } else {
+                    backendAvailable = false;
+                }
+            } catch (err) {
+                console.warn("Flask server unreachable. Continuing in local Offline Mode.");
+                backendAvailable = false;
+            }
+            updateStatusIndicator();
+            renderQuests(quests);
+        }
+
+        // Visual state manager
+        function switchState(stateName) {
+            const states = ['state-idle', 'state-rolling', 'state-result', 'state-celebration'];
+            states.forEach(stateId => {
+                const element = document.getElementById(stateId);
+                if (stateId === stateName) {
+                    element.classList.remove('state-hidden');
+                    element.classList.add('state-visible');
+                } else {
+                    element.classList.remove('state-visible');
+                    element.classList.add('state-hidden');
+                }
+            });
+        }
+
+        // Render quest tags
+        function renderQuests(questArray) {
+            questListContainer.innerHTML = '';
+
+            if (!questArray || questArray.length === 0) {
+                questListContainer.innerHTML = `
+                    <div class="text-center py-6 text-purple-300/40 text-xs italic">
+                        Log is empty. Insert a task above!
+                    </div>
+                `;
+                return;
+            }
+
+            questArray.forEach((quest, index) => {
+                const bubble = document.createElement('div');
+                bubble.className = "flex justify-between items-center bg-[#250d41] hover:bg-[#2f1351] rounded-full px-5 py-3 text-sm text-purple-100 transition-all border border-purple-900/20 group animate-fade-in";
+                bubble.innerHTML = `
+                    <span class="truncate font-semibold text-purple-100/90">${quest}</span>
+                    <button onclick="deleteQuest(${index})" class="text-purple-300/50 hover:text-red-400 p-1 transition-all">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                `;
+                questListContainer.appendChild(bubble);
+            });
+        }
+
+        // Add quest item
+        async function addNewQuest() {
+            const taskText = questInput.value.trim();
+            if (!taskText) return;
+
+            if (backendAvailable) {
+                try {
+                    const response = await fetch(getApiUrl('/api/quests'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ quest: taskText })
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        quests = data.quests;
+                    } else {
+                        quests.push(taskText);
+                    }
+                } catch (err) {
+                    console.warn("Lost Flask connection. Saving quest locally.");
+                    backendAvailable = false;
+                    updateStatusIndicator();
+                    quests.push(taskText);
+                }
+            } else {
+                quests.push(taskText);
+            }
+
+            questInput.value = '';
+            renderQuests(quests);
+        }
+
+        questInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                addNewQuest();
+            }
+        });
+
+        // Delete quest item
+        async function deleteQuest(index) {
+            if (backendAvailable) {
+                try {
+                    const response = await fetch(getApiUrl('/api/quests/delete'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ index: index })
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        quests = data.quests;
+                    } else {
+                        quests.splice(index, 1);
+                    }
+                } catch (err) {
+                    console.warn("Lost Flask connection. Deleting quest locally.");
+                    backendAvailable = false;
+                    updateStatusIndicator();
+                    quests.splice(index, 1);
+                }
+            } else {
+                quests.splice(index, 1);
+            }
+            renderQuests(quests);
+        }
+
+        // Clear all database values
+        async function clearAllQuests() {
+            if (backendAvailable) {
+                try {
+                    const response = await fetch(getApiUrl('/api/quests/clear'), { method: 'POST' });
+                    if (response.ok) {
+                        const data = await response.json();
+                        quests = data.quests;
+                    } else {
+                        quests = [];
+                    }
+                } catch (err) {
+                    console.warn("Lost Flask connection. Clearing list locally.");
+                    backendAvailable = false;
+                    updateStatusIndicator();
+                    quests = [];
+                }
+            } else {
+                quests = [];
+            }
+            renderQuests(quests);
+        }
+
+        // Add pre-configured suggested quest
+        async function addSuggestedQuest() {
+            const randomSuggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
+            if (backendAvailable) {
+                try {
+                    const response = await fetch(getApiUrl('/api/quests'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ quest: randomSuggestion })
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        quests = data.quests;
+                    } else {
+                        quests.push(randomSuggestion);
+                    }
+                } catch (err) {
+                    console.warn("Lost Flask connection. Adding suggestion locally.");
+                    backendAvailable = false;
+                    updateStatusIndicator();
+                    quests.push(randomSuggestion);
+                }
+            } else {
+                quests.push(randomSuggestion);
+            }
+            renderQuests(quests);
+        }
+
+        // Roll action
+        async function triggerRandomizer() {
+            if (quests.length === 0) {
+                const originalPlaceholder = questInput.placeholder;
+                questInput.placeholder = "⚠️ Add a quest first!";
+                questInput.classList.add("border-red-500");
+                setTimeout(() => {
+                    questInput.placeholder = originalPlaceholder;
+                    questInput.classList.remove("border-red-500");
+                }, 2000);
+                return;
+            }
+
+            const rollBtn = document.getElementById('roll-btn');
+
+            // Trigger visual shakes
+            switchState('state-rolling');
+            rollBtn.disabled = true;
+            rollBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            let chosenQuest = "";
+
+            if (backendAvailable) {
+                try {
+                    const response = await fetch(getApiUrl('/api/roll'));
+                    if (response.ok) {
+                        const data = await response.json();
+                        chosenQuest = data.quest;
+                        rolledQuestIndex = data.index;
+                    } else {
+                        rolledQuestIndex = Math.floor(Math.random() * quests.length);
+                        chosenQuest = quests[rolledQuestIndex];
+                    }
+                } catch (err) {
+                    console.warn("Lost Flask connection. Performing local randomization.");
+                    backendAvailable = false;
+                    updateStatusIndicator();
+                    rolledQuestIndex = Math.floor(Math.random() * quests.length);
+                    chosenQuest = quests[rolledQuestIndex];
+                }
+            } else {
+                rolledQuestIndex = Math.floor(Math.random() * quests.length);
+                chosenQuest = quests[rolledQuestIndex];
+            }
+
+            // Suspense countdown
+            setTimeout(() => {
+                document.getElementById('result-text').textContent = `"${chosenQuest}"`;
+                switchState('state-result');
+                rollBtn.disabled = false;
+                rollBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }, 1500);
+        }
+
+        // Action when completing quest
+        async function completeQuest() {
+            if (rolledQuestIndex !== -1) {
+                await deleteQuest(rolledQuestIndex);
+                rolledQuestIndex = -1;
+            }
+
+            const quoteText = document.getElementById('quote-text');
+            const randomItem = funnyInspirationalQuotes[Math.floor(Math.random() * funnyInspirationalQuotes.length)];
+
+            quoteText.textContent = `"${randomItem.quote}"`;
+
+            switchState('state-celebration');
+        }
+
+        function resetDisplay() {
+            switchState('state-idle');
+        }
+
+        // Initial setup
+        window.onload = function() {
+            loadQuestsFromServer();
+        };
+    </script>
+</body>
+</html>
